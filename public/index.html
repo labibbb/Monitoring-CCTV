@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Peta CCTV Lumpur Lapindo</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    body, html { margin:0; padding:0; height:100%; font-family: 'Segoe UI', Tahoma, sans-serif; }
+    #map { width:100%; height:100vh; }
+
+    .title-overlay {
+      position: absolute; top: 20px; right: 20px;
+      background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
+      padding: 0.8rem 1.2rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+      z-index: 1000;
+    }
+    .title-overlay h2 { margin:0; font-size:1.1rem; color:#2c3e50; }
+
+    /* Modal */
+    .video-modal {
+      display: none;
+      position: fixed;
+      z-index: 10000;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .video-card {
+      background: #fff;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 720px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .video-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.7rem 1rem;
+      border-bottom: 1px solid #e5e5e5;
+      background: #f9f9f9;
+    }
+    .video-header h3 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #2c3e50;
+    }
+    .close-btn {
+      border: none;
+      background: transparent;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: #7f8c8d;
+      transition: color 0.2s;
+    }
+    .close-btn:hover { color: #e74c3c; }
+
+    .video-body {
+      background: #000;
+    }
+    .video-body video {
+      width: 100%;
+      height: 400px;
+      object-fit: contain;
+      background: #000;
+    }
+
+    .video-footer {
+      padding: 0.6rem 1rem;
+      font-size: 0.85rem;
+      color: #555;
+      border-top: 1px solid #e5e5e5;
+      background: #fafafa;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .status-online { color: #27ae60; font-weight: 600; }
+    .status-offline { color: #e74c3c; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="title-overlay">
+    <h2>Pemantau CCTV Lumpur Lapindo</h2>
+  </div>
+
+  <!-- Modal Video -->
+  <div id="videoModal" class="video-modal">
+    <div class="video-card">
+      <div class="video-header">
+        <h3 id="modalTitle">Live Stream CCTV</h3>
+        <button class="close-btn" onclick="closeVideoModal()">&times;</button>
+      </div>
+      <div class="video-body">
+        <video id="videoPlayer" controls autoplay muted></video>
+      </div>
+      <div class="video-footer">
+        <span><strong>Status:</strong> <span id="streamStatus">Menunggu...</span></span>
+        <span><strong>Protocol:</strong> HLS (via FFmpeg)</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const cctvs = [
+      {
+        id: 1,
+        name: "CCTV Pusat Semburan Lapindo",
+        lat: -7.5257, lng: 112.7134,
+        status: "online",
+        streamUrl: "/hls/stream.m3u8"
+      }
+    ];
+
+    let map, hls = null, isStreaming = false;
+
+    function initMap() {
+      map = L.map('map').setView([cctvs[0].lat, cctvs[0].lng], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+      }).addTo(map);
+
+      cctvs.forEach(addCCTVMarker);
+    }
+
+    function addCCTVMarker(cctv) {
+      const markerColor = cctv.status === 'online' ? '#27ae60' : '#e74c3c';
+      const icon = L.divIcon({
+        className: 'custom-marker',
+        html: `<div style="
+          background:${markerColor}; color:white;
+          border:3px solid white; border-radius:50%;
+          width:40px; height:40px;
+          display:flex; align-items:center; justify-content:center;
+          font-size:18px; box-shadow:0 4px 12px rgba(0,0,0,0.3);
+        ">📹</div>`,
+        iconSize: [40,40], iconAnchor: [20,20]
+      });
+
+      const marker = L.marker([cctv.lat, cctv.lng], { icon }).addTo(map);
+      marker.bindPopup(`
+        <div style="font-size:0.9rem;">
+          <div style="font-weight:bold; font-size:1rem; margin-bottom:4px;">${cctv.name}</div>
+          <div><strong>ID Kamera:</strong> ${cctv.id}</div>
+          <div><strong>Status:</strong> <span style="color:${cctv.status==='online'?'#27ae60':'#e74c3c'}">${cctv.status}</span></div>
+          <div><strong>Koordinat:</strong> ${cctv.lat.toFixed(5)}, ${cctv.lng.toFixed(5)}</div>
+          <div style="margin-top:8px; text-align:center;">
+            <button onclick="openVideoModal(${cctv.id})" style="
+              background:#3498db; color:white; border:none;
+              padding:6px 12px; border-radius:6px; cursor:pointer;
+              font-weight:bold;">▶️ Tonton Live</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function openVideoModal(cctvId) {
+      const cctv = cctvs.find(c => c.id === cctvId);
+      if (!cctv) return;
+      document.getElementById('modalTitle').textContent = cctv.name;
+      document.getElementById('videoModal').style.display = 'flex';
+      playStream(cctv.streamUrl);
+    }
+
+    function closeVideoModal() {
+      document.getElementById('videoModal').style.display = 'none';
+      stopStream();
+    }
+
+    function playStream(url) {
+      const video = document.getElementById('videoPlayer');
+      const status = document.getElementById('streamStatus');
+      if (isStreaming) return;
+
+      status.textContent = "Menghubungkan...";
+      if (Hls.isSupported()) {
+        hls = new Hls();
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          video.play();
+          status.textContent = "Online";
+          status.className = "status-online";
+          isStreaming = true;
+        });
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          status.textContent = "Error stream: " + data.type;
+          status.className = "status-offline";
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = url;
+        video.play();
+        status.textContent = "Online (Safari)";
+        status.className = "status-online";
+        isStreaming = true;
+      } else {
+        status.textContent = "Browser tidak mendukung HLS";
+        status.className = "status-offline";
+      }
+    }
+
+    function stopStream() {
+      const video = document.getElementById('videoPlayer');
+      const status = document.getElementById('streamStatus');
+      if (hls) {
+        hls.destroy(); hls = null;
+      }
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      isStreaming = false;
+      status.textContent = "Stream dihentikan";
+      status.className = "status-offline";
+    }
+
+    document.addEventListener('DOMContentLoaded', initMap);
+  </script>
+</body>
+</html>
