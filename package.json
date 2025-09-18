@@ -6,16 +6,6 @@
   "scripts": {
     "start": "node server.js"
   },
-  "keywords": [
-    "nodejs",
-    "express",
-    "ffmpeg",
-    "rtsp",
-    "hls",
-    "streaming"
-  ],
-  "author": "Your Name",
-  "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.1.0",
